@@ -1,0 +1,157 @@
+#!/bin/python3
+#Author: Jacob Schofield
+
+#importing libraries
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA as pca
+
+#text coloring variables
+RED = '\33[31m'
+GREEN  = '\33[32m'
+GREYBG = '\33[100m'
+BLUE = '\33[34m'
+END = '\033[0m'
+
+#importing file data into pandas dataframe
+
+file_name = input("Enter the file path of the CSV file you wish to clean: ")
+file_path = file_name
+raw_data = pd.read_csv(f"{file_path}")
+pd.set_option('display.max_columns', None)
+
+#building lists of column names
+
+data_type = list(raw_data.columns.values)
+cleaned_data_z_score_buffer = pd.DataFrame()
+cleaned_data_lower_buffer = pd.DataFrame()
+cleaned_data_upper_buffer = pd.DataFrame()
+cleaned_data = pd.DataFrame()
+data_type_int_list = raw_data.select_dtypes(exclude=[object]).columns.tolist()
+z_score_column_list = []
+z_score_column_df = pd.DataFrame()
+pca_column_len = []
+pca_final = pd.DataFrame()
+
+print(GREEN + "Performing automated data cleaning sequance\n\n" + END)
+starting_number_z_score = len(raw_data)
+
+#for loop for processing and writing out new DataFrame
+for field_to_check in data_type:
+    
+    column_data_type = raw_data[field_to_check].dtype
+    miss_data_var = raw_data[field_to_check].isnull().sum()
+    print("checking data column " + GREEN + field_to_check + END + "\tColumn data type is : " + GREEN + str(column_data_type) + END)
+
+    #handling object based columns
+    if column_data_type == "object":
+        
+        #handling missing values in object column
+        if miss_data_var > 0:
+            print (GREEN + "\tCorrected missing data using the mean value of the column" + END)
+            cleaned_data_z_score_buffer[field_to_check] = raw_data[field_to_check].fillna(raw_data[field_to_check].mode())                                                          
+
+        else:
+            cleaned_data_z_score_buffer[field_to_check] = raw_data[field_to_check]
+
+    #handling integer based columns
+    else:
+
+        #Building a list of z-score column names
+        z_score_column_list.append(field_to_check + "_z_score")
+        
+        print (GREYBG + BLUE + "\tPreforming Z-score calcualtion\t" + END)
+        z_score_calculation = (raw_data[field_to_check] - raw_data[field_to_check].mean()) / raw_data[field_to_check].std()
+    
+        cleaned_data_z_score_buffer[field_to_check] = raw_data[field_to_check]
+        cleaned_data_z_score_buffer[field_to_check + "_z_score"] = z_score_calculation
+        
+ #filtering out rows containing outlier data based on z-score values
+cleaned_data_len = len(cleaned_data_z_score_buffer)
+
+for column_to_check in z_score_column_list:
+    #logic to search for columns with an extream number of outliers
+    column_lower_reduction_var = len(cleaned_data_z_score_buffer[cleaned_data_z_score_buffer[column_to_check] < -3])
+    column_upper_reduction_var = len(cleaned_data_z_score_buffer[cleaned_data_z_score_buffer[column_to_check] > 3])
+    column_reduction_var = column_lower_reduction_var + column_upper_reduction_var
+    column_diff_var = (column_reduction_var / cleaned_data_len) * 10
+
+    if column_diff_var > 1:
+        print ("its huge")
+            
+    else:
+        cleaned_data_upper_buffer = cleaned_data_z_score_buffer[cleaned_data_z_score_buffer[column_to_check] < 3 ]
+        cleaned_data_lower_buffer = cleaned_data_upper_buffer[cleaned_data_upper_buffer[column_to_check] > -3 ]   
+
+cleaned_data_z_score_buffer = 0
+cleaned_data_upper_buffer = 0
+
+#filling in non-objectcolumn missing data
+
+for int_column_loop in data_type_int_list:
+    
+    print("Looking for missing integer data in column " + GREEN + int_column_loop + END)
+
+    missing_int_data_var = cleaned_data_lower_buffer[int_column_loop].isnull().sum()
+    cleaned_data_lower_buffer[int_column_loop].fillna(cleaned_data_lower_buffer[int_column_loop].mean(), inplace = True)
+    
+    if missing_int_data_var > 0:
+        missing_int_data_mean = cleaned_data_lower_buffer[int_column_loop].mean()
+        print(RED + "\tWARNING" + END +": Misssing data found, replaced with the column mean value of " + GREEN + str (missing_int_data_mean) + END)
+
+cleaned_data = cleaned_data_lower_buffer.fillna(0)
+ending_number_z_score = len(cleaned_data)
+diff_number_z_score = starting_number_z_score - ending_number_z_score
+
+print ("")
+print ("Anomaly and missing data fix complete")
+
+if diff_number_z_score > 0:
+    print(GREEN + str(diff_number_z_score) + END + " of rows removed containing integer outliers.")
+    
+#starting PCA analysis of Z-score data
+#building z-score only table
+for z_score_column in z_score_column_list:
+    z_score_column_df[z_score_column] = cleaned_data[z_score_column]
+    
+#skree plot view
+pca_var = len(z_score_column_list)
+z_score_column_transform = StandardScaler().fit_transform(z_score_column_df)
+pca = pca(n_components = pca_var).fit(z_score_column_transform)
+cleaned_data_pca = pca.transform(z_score_column_transform)
+var_exp = pca.explained_variance_ratio_
+
+print(GREEN + "SKREE plot" + END)
+print("Use this graph to help determine the number of principal components you are interested in")
+
+plt.plot(pca.explained_variance_ratio_)
+plt.xlabel('number of components')
+plt.ylabel('explained variance')
+plt.show()
+
+#Prompting for the number of PCA columns to run and conducting PCA on variables
+user_number_of_pca_columns = input("How many columns would you like to include in your PCA? ")
+print(RED + "NOTE:" + END + " if running from terminal, scree plot will not display")
+pca_building_column = len(z_score_column_list)
+
+#building the pca column length
+column_var = 1
+for a in range(pca_building_column):
+    pca_column_len.append("pca_" + str(column_var))
+    column_var += 1
+
+pca_matrix = pd.DataFrame(pca.components_.T, columns=pca_column_len, index=z_score_column_df.columns)
+
+column_var = 1
+for a in range(int(user_number_of_pca_columns)):
+    pca_final["pca_" + str(column_var)] = pca_matrix["pca_" + str(column_var)]
+    column_var += 1
+    
+print(GREEN + "PCA analysis" + END)
+print("Look for rows with the largest numbers to determine variable weighting. \nThese values have been magnified for easier interpretability and do not represent actual variance.")
+print(pca_final * 1000 * pca_final)
+print("")
+print(GREEN + "Cleand data statistical overview" + END)
+print(cleaned_data.describe())
