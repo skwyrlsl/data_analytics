@@ -1,2 +1,2 @@
 # data_analytics
-This repo contains my tools I built for conducting various data analysis tasks
+Thank you for stopping by! I built this repo to contains my tools I develop for the purpose of conducting various data analysis tasks. I am a firm believe in the open source community and welcome all to use and share!
