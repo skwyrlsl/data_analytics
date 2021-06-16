@@ -1,0 +1,205 @@
+#!/bin/python3
+#author: Jacob Schofield
+
+#importing libraries
+import pandas as pd
+import matplotlib.pyplot as plt
+#import numpy as np
+from scipy.stats import ttest_ind
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA as pca
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
+
+#text coloring variables
+RED = '\33[31m'
+GREEN  = '\33[32m'
+GREYBG = '\33[100m'
+BLUE = '\33[34m'
+END = '\033[0m'
+
+#importing file data into pandas dataframe
+
+file_name = input("Enter the file path of the CSV file you wish to clean: ")
+file_path = file_name
+raw_data = pd.read_csv(f"{file_path}")
+pd.set_option('display.max_columns', None)
+
+#selection of key column variables
+data_type = list(raw_data.columns.values)
+column_data_display = []
+
+print(GREEN + "List of integer based columns" + END)
+print("")
+
+for int_element in data_type:
+    data_type_display = raw_data[int_element].dtype
+    column_data_display.append(["Column name: " + str(int_element) , "Data type: " + str(data_type_display)])
+
+
+def column_print():
+    for row in column_data_display:
+        print("{: <50} {: <40}".format(*row))
+
+column_print()
+    
+print("")
+key_field_input = input("Enter the key binary field you would like to test against: ")
+
+print("\nThis will help automaticly generate your comparitive columns for bootstrapping\n\n" + RED + "Enter 1 if this binary field is numberical \nEnter 2 if the field is qualitative (yes/no)\n" + END)
+
+key_field_binary_type = input("Selection: ")
+binary_escape_var = 0
+
+print(GREEN + "\nBinary data type: " + END)
+print(raw_data[key_field_input].value_counts())
+
+print("")
+
+while binary_escape_var == 0:
+    
+    if key_field_binary_type == "1":
+        binary_selector = input("Enter the True numeral for the selected binary column")
+        binary_escape_var = 1
+    
+    elif key_field_binary_type == "2":
+        binary_selector = input("Enter the True value for the selected binary column. \n Note: This is case sensative")
+        binary_escape_var = 1
+    
+    else:
+        print(RED + "Invalid Selection made try again\n" + END)
+        print("\nThis will help automaticly generate your comparitive columns for bootstrapping\n\n" + RED + "Enter 1 if this binary field is numberical \nEnter 2 if the field is qualitative (yes/no)\n" + END)
+        key_field_binary_type = input("Selection: ")
+
+#Selecting columns for analysis
+
+bi_variant_list = []
+
+while True:
+    try:
+        analysis_selection_var = int(input("Enter number of columns would you like to eneter for exploritory analysis"))
+        break
+        
+    except ValueError:
+        print(RED + "Value entered is not a number, please try again." + END)
+        
+column_print()
+        
+print("")
+print(GREEN + "Entering column names" + END)
+print(RED + "WARNING:" + END + " Items entered here are case sensitive" )
+analysis_control_var = 0
+
+while analysis_control_var < analysis_selection_var:
+    analysis_control_var = analysis_control_var + 1
+    input_buffer = input("Column variable: ")
+    bi_variant_list.append(input_buffer)
+    input_buffer = "" #Clearing buffer
+
+#building true/false dataframes based of key field indicator
+print("\nWhat size graph would you like to display for the bi-variant comparison?\n\n" + RED + "1 for small\n" + GREEN + "2 for medium\n" + END + "3 for large")
+
+while True:
+    try:
+        grid_size_selection_var = int(input("Enter grid size selection"))
+        break
+        
+    except ValueError:
+        print(RED + "Value entered is not a number, please try again." + END)
+        
+grid_size_control_var = 0
+
+while grid_size_control_var == 0:
+
+    if grid_size_selection_var == 1:
+        grid_size_var = 15
+        grid_size_control_var = 1
+        
+    elif grid_size_selection_var == 2:
+        grid_size_var = 30
+        grid_size_control_var = 1
+        
+    elif grid_size_selection_var == 3:
+        grid_size_var = 90
+        grid_size_control_var = 1
+        
+    else:
+        print(RED+ "\n\nInvalid grid size made. Try again\n" + END)
+        print("\nWhat size graph would you like?\n\n" + RED + "1 for small\n" + GREEN + "2 for medium\n" + END + "3 for large")
+        
+        while True:
+            try:
+                grid_size_selection_var = int(input("Enter grid size selection"))
+                break
+        
+            except ValueError:
+                print(RED + "Value entered is not a number, please try again." + END)
+
+#Statistical analysis
+exploritory_selection_false = raw_data.loc[raw_data[key_field_input] != binary_selector].sample(n=10000, replace=True).reset_index(drop=True)
+exploritory_selection_true = raw_data.loc[raw_data[key_field_input] == binary_selector].sample(n=10000, replace=True).reset_index(drop=True)
+exploritory_data_frame = pd.DataFrame()
+
+for field_selection_name in bi_variant_list:
+    #setting field name
+    true_field = str(field_selection_name) + " " + str(key_field_input) + " true"
+    false_field = str(field_selection_name) + " " + str(key_field_input) + " false"
+    
+    #building singular dataframe
+    exploritory_data_frame[false_field] = exploritory_selection_false[field_selection_name]
+    exploritory_data_frame[true_field] = exploritory_selection_true[field_selection_name]    
+    
+    print(RED + field_selection_name + " data exploration" + END)   
+    hist_plot_loop_data_type = raw_data[field_selection_name].dtype
+    
+    if hist_plot_loop_data_type != "object":
+         #univariant analysis
+            
+        print("--------------------------------------------------")
+        print(GREEN + "Univariant descriptive statistics\n" + END)
+ 
+        #true variable
+        print(GREEN + true_field + " univariant statistics:" + END)
+        print(exploritory_data_frame[true_field].describe())
+
+        print(GREEN + "\n" + true_field + " histogram\n" + END)
+        exploritory_data_frame.hist(column = true_field)
+        
+        plt.show()
+
+        print("--------------------------------------------------")
+        
+        #false variable
+        print(GREEN + false_field + " univariant statistics:" + END)
+        print(exploritory_data_frame[false_field].describe())
+
+        print(GREEN + "\n" + false_field + " histogram\n" + END)
+        exploritory_data_frame.hist(column = false_field)
+        
+        plt.show()
+        
+        print("--------------------------------------------------\n")
+        
+        #bi-variant analysis
+        print(GREEN + "\nT-test\n" + END)        
+
+        print(ttest_ind(exploritory_data_frame[true_field],exploritory_data_frame[false_field]))
+
+        ###############################################
+
+        print(GREEN + "\nBi-variant graph of variables\n" + END)
+        hex_graph = exploritory_data_frame.plot.hexbin(x=true_field, y=false_field, gridsize=grid_size_var, sharex=False, figsize=(5, 4))
+        hex_graph.set_xlabel(field_selection_name + " " + key_field_input + "True") 
+        hex_graph.set_ylabel(field_selection_name + " " + key_field_input + "False")
+        plt.show()       
+        
+    else:
+        raw_data[field_selection_name].value_counts().plot.bar(title=str(field_selection_name) + " bar graph").savefig(hist_plot_loop)
+        
+    print(RED + "\n==============================================================================================" + END)
+    
+    
+print("Data corrolation matrix")
+exploritory_data_frame.corr()
+
