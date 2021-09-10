@@ -1,0 +1,332 @@
+#!/usr/bin/python3
+#Author: Jacob Schofield
+
+#importing libraries
+import numpy as np
+import scipy as sp
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+
+#text coloring variables
+RED = '\33[31m'
+GREEN  = '\33[32m'
+GREYBG = '\33[100m'
+BLUE = '\33[34m'
+END = '\033[0m'
+
+#importing file data into pandas dataframe
+file_name = input("Enter the file path of the CSV file you wish to clean: ")
+file_path = file_name
+raw_data = pd.read_csv(f"{file_path}")
+pd.set_option('display.max_columns', None)
+
+#building funtion for column display
+data_type = list(raw_data.columns.values)
+column_data_display = []
+int_column_data_display = []
+non_int_column_data_display = []
+selected_data_list = []
+
+for element in data_type:
+    data_type_display = raw_data[element].dtype
+    column_data_display.append(["Column name: " + str(element) , "Data type: " + str(data_type_display)])
+
+for int_element in data_type:
+    data_type_display = raw_data[int_element].dtype
+
+    if data_type_display != "object":
+        int_column_data_display.append(["Column name: " + str(int_element) , "Data type: " + str(data_type_display)])
+        
+    else:
+        non_int_column_data_display.append(["Column name: " + str(int_element) , "Data type: " + str(data_type_display)])
+
+def column_print():
+    for row in column_data_display:
+        print("{: <50} {: <40}".format(*row))
+        
+def int_column_print():
+    for row in int_column_data_display:   
+        print("{: <50} {: <40}".format(*row))
+        
+def non_int_column_print():
+    for row in non_int_column_data_display:   
+        print("{: <50} {: <40}".format(*row))
+        
+#Converting qualitative values to a quantitative value
+print("Would you like to convert any qualitative columns to a numerical value?")
+qual_to_num_selection = input("yes/no:")
+
+if qual_to_num_selection == "yes":
+    qual_to_num_list = []
+    while True:
+        try:
+            qual_to_num_selection_var = int(input("Enter number of columns would you like to convert to a qualitative variable:"))
+            break
+        
+        except ValueError:
+            print(RED + "Value entered is not a number, please try again." + END)
+
+    print("")
+    non_int_column_print()
+    print("")
+    print(GREEN + "Entering column names" + END)
+    print(RED + "WARNING:" + END + " Items entered here are case sensitive" )
+    qual_to_num_control_var = 0
+
+    while qual_to_num_control_var < qual_to_num_selection_var:
+        qual_to_num_control_var = qual_to_num_control_var + 1
+        input_buffer = input("Column variable: ")
+        qual_to_num_list.append(input_buffer)
+        input_buffer = "" #Clearing buffer
+        
+    for element in qual_to_num_list:
+
+        print("\nUnique values for " + GREEN + element + END)
+        print(raw_data[element].explode().value_counts())
+        
+        while True:
+            try:
+                unique_column_count = int(input("How man unique columns are in " + element + "?: "))
+                break
+            
+            except ValueError:
+                print(RED + "Value entered is not a number, please try again." + END)
+                
+        qual_to_num_unique_control = 0
+            
+        while qual_to_num_unique_control < unique_column_count:
+            #print ("Which variable would you like to replace with " + str(qual_to_num_unique_control) + "?")
+            qual_to_num_replace = input("Which variable would you like to replace with " + str(qual_to_num_unique_control) + "?")
+            raw_data[element].replace(to_replace=qual_to_num_replace, value=qual_to_num_unique_control, inplace=True)
+            
+            qual_to_num_unique_control = qual_to_num_unique_control + 1
+            
+    for element in data_type:
+        data_type_display = raw_data[element].dtype
+        column_data_display.append(["Column name: " + str(element) , "Data type: " + str(data_type_display)])
+
+    for int_element in data_type:
+        data_type_display = raw_data[int_element].dtype
+
+        if data_type_display != "object":
+            int_column_data_display.append(["Column name: " + str(int_element) , "Data type: " + str(data_type_display)])
+        
+        else:
+            non_int_column_data_display.append(["Column name: " + str(int_element) , "Data type: " + str(data_type_display)])
+            
+#prompting user to criteria selection
+print(GREEN + "Enter the variable you would like to predict:" + END)
+int_column_print()
+
+primary_variable = input("Dependant variable: ")
+selected_data_list.append(primary_variable)
+
+#secondary variables
+bi_variant_list = []
+
+while True:
+    try:
+        analysis_selection_var = int(input("Enter number of columns would you like to eneter as independant variables:"))
+        break
+        
+    except ValueError:
+        print(RED + "Value entered is not a number, please try again." + END)
+        
+print("")
+print(GREEN + "Entering column names" + END)
+print(RED + "WARNING:" + END + " Items entered here are case sensitive" )
+analysis_control_var = 0
+
+while analysis_control_var < analysis_selection_var:
+    analysis_control_var = analysis_control_var + 1
+    input_buffer = input("Column variable: ")
+    bi_variant_list.append(input_buffer)
+    selected_data_list.append(input_buffer)
+    input_buffer = "" #Clearing buffer
+    
+#Cleaning and normalizing selected data
+cleaned_data_z_score_buffer = pd.DataFrame()
+cleaned_data_lower_buffer = pd.DataFrame()
+cleaned_data_upper_buffer = pd.DataFrame()
+cleaned_data = pd.DataFrame()
+cleaned_data_stats = pd.DataFrame()
+data_type_int_list = raw_data.select_dtypes(exclude=[object]).columns.tolist()
+z_score_column_list = []
+z_score_column_df = pd.DataFrame()
+selected_data = pd.DataFrame()
+
+print(GREEN + "Performing automated data cleaning sequance\n\n" + END)
+starting_number_z_score = len(raw_data)
+
+#for loop for processing and writing out new DataFrame
+for field_to_check in selected_data_list:
+    
+    column_data_type = raw_data[field_to_check].dtype
+    miss_data_var = raw_data[field_to_check].isnull().sum()
+    print("checking data column " + GREEN + field_to_check + END + "\tColumn data type is : " + GREEN + str(column_data_type) + END)
+
+    #handling object based columns
+    if column_data_type == "object":
+        
+        #handling missing values in object column
+        if miss_data_var > 0:
+            print (GREEN + "\tCorrected missing data using the mean value of the column" + END)
+            cleaned_data_z_score_buffer[field_to_check] = raw_data[field_to_check].fillna(raw_data[field_to_check].mode())                                                          
+
+        else:
+            cleaned_data_z_score_buffer[field_to_check] = raw_data[field_to_check]
+
+        cleaned_data_stats[field_to_check] = cleaned_data_z_score_buffer[field_to_check].mode()
+        
+    #handling integer based columns
+    else:
+
+        #Building a list of z-score column names
+        z_score_column_list.append(field_to_check + "_z_score")
+        
+        print (GREYBG + BLUE + "\tPreforming Z-score calcualtion\t" + END)
+        z_score_calculation = (raw_data[field_to_check] - raw_data[field_to_check].mean()) / raw_data[field_to_check].std()
+    
+        cleaned_data_z_score_buffer[field_to_check] = raw_data[field_to_check]
+        cleaned_data_z_score_buffer[field_to_check + "_z_score"] = z_score_calculation
+        
+#filtering out rows containing outlier data based on z-score values
+cleaned_data_len = len(cleaned_data_z_score_buffer)
+
+for column_to_check in z_score_column_list:
+    #logic to search for columns with an extream number of outliers
+    column_lower_reduction_var = len(cleaned_data_z_score_buffer[cleaned_data_z_score_buffer[column_to_check] < -3])
+    column_upper_reduction_var = len(cleaned_data_z_score_buffer[cleaned_data_z_score_buffer[column_to_check] > 3])
+    column_reduction_var = column_lower_reduction_var + column_upper_reduction_var
+    column_diff_var = (column_reduction_var / cleaned_data_len) * 10
+
+    if column_diff_var > 1:
+        print ("A large amount of data is missing from this column.")
+            
+    else:
+        cleaned_data_upper_buffer = cleaned_data_z_score_buffer[cleaned_data_z_score_buffer[column_to_check] < 3 ]
+        cleaned_data_lower_buffer = cleaned_data_upper_buffer[cleaned_data_upper_buffer[column_to_check] > -3 ]   
+
+cleaned_data_z_score_buffer = 0
+cleaned_data_upper_buffer = 0
+
+#filling in non-objectcolumn missing data
+
+for int_column_loop in selected_data_list:
+    print("Looking for missing integer data in column " + GREEN + int_column_loop + END)
+
+    missing_int_data_var = cleaned_data_lower_buffer[int_column_loop].isnull().sum()
+    cleaned_data_lower_buffer[int_column_loop].fillna(cleaned_data_lower_buffer[int_column_loop].mean(), inplace = True)
+
+    cleaned_data_stats[int_column_loop] = cleaned_data_lower_buffer[int_column_loop].mean()
+    
+    if missing_int_data_var > 0:
+        missing_int_data_mean = cleaned_data_lower_buffer[int_column_loop].mean()
+        print(RED + "\tWARNING" + END +": Misssing data found, replaced with the column mean value of " + GREEN + str (missing_int_data_mean) + END)
+
+cleaned_data = cleaned_data_lower_buffer.fillna(0)
+ending_number_z_score = len(cleaned_data)
+diff_number_z_score = starting_number_z_score - ending_number_z_score
+
+print ("")
+print ("Anomaly and missing data fix complete")
+
+if diff_number_z_score > 0:
+    print(GREEN + str(diff_number_z_score) + END + " of rows removed containing integer outliers.")
+    
+#rebuilding original dataframe from cleaned data
+print(GREEN + "\nWould you like to set an arbitrary intercept as 0?")
+intercept_selection = input("yes/no: ")
+
+for element in selected_data_list:
+    selected_data[element] = cleaned_data[element]
+
+if intercept_selection == "yes":
+    selected_data['intercept'] = 1
+    
+print("")    
+print(RED + "\n==============================================================================================" + END)
+
+#data selection visualization
+for field_selection_name in selected_data_list:
+    
+    print(RED + field_selection_name + " post cleaning data description" + END)   
+    hist_plot_loop_data_type = selected_data[field_selection_name].dtype
+
+    print(GREEN + "Dependant Variable: " + END + primary_variable)
+    print(GREEN + "Independant Variable: " + END + field_selection_name)
+    print ("")    
+    
+    if hist_plot_loop_data_type != "object":
+         #univariant analysis
+            
+        print("--------------------------------------------------")
+        print(GREEN + "Univariant descriptive statistics\n" + END)
+ 
+        print(GREEN + field_selection_name + " univariant statistics:" + END)
+        print(selected_data[field_selection_name].describe())
+
+        print(GREEN + "\n" + field_selection_name + " histogram\n" + END)
+        selected_data.hist(column = field_selection_name)
+        
+        plt.show()    
+
+        if field_selection_name != primary_variable:
+
+            hex_graph=selected_data.plot.scatter(x=primary_variable, y=field_selection_name, color="orange")
+            hex_graph.set_xlabel(primary_variable)
+            hex_graph.set_ylabel(field_selection_name)
+            plt.show()
+            print("\n\n")
+        
+    else:
+        selected_data[field_selection_name].value_counts().plot.bar(title=str(field_selection_name) + " bar graph").savefig(hist_plot_loop)
+        
+    print(RED + "\n==============================================================================================" + END)
+    
+#Data standardization
+data_set_length = len(selected_data)
+variables = selected_data.columns
+standardization = StandardScaler()
+cleand_data_standardized = standardization.fit_transform(selected_data)
+cleaned_data_standardized = np.column_stack((cleand_data_standardized,np.ones(data_set_length)))
+primary_var_standardized  = selected_data[primary_variable].values
+
+#liniar regresion
+lin_reg_independant_var = bi_variant_list
+if intercept_selection == "yes":
+    lin_reg_independant_var.append("intercept")
+
+lin_reg = sm.OLS(selected_data[primary_variable],selected_data[lin_reg_independant_var]).fit()
+print(lin_reg.summary())
+
+print(GREEN + "\nCorrolation matrix:" + END)
+selected_data[selected_data_list].corr()
+
+#building predictave equation
+coefficients = {}
+
+for field_to_build in bi_variant_list:
+    print(GREEN + "What is the coefficient for " + END + field_to_build + "?")
+    coefficients[field_to_build] = input(field_to_build + " selection:")
+
+repeat_cred = "yes"
+
+print(RED + "Predictave analysis" + END)
+
+while repeat_cred == "yes":
+    calculation_variable = 0
+    
+    for calculation in bi_variant_list:
+        if calculation != "intercept":
+            calculation_user_input = float(input(calculation + " parameter: "))
+            calculation_variable = calculation_variable + (float(coefficients[calculation]) * calculation_user_input)
+               
+    predicted_variiable = float(coefficients["intercept"]) + calculation_variable
+    print(GREEN + "Predictave regresion analysis indicates that the value of " + END + primary_variable + GREEN + " is " + END + str(predicted_variiable) + "\n")
+    #print(float(coefficients["Tenure"]) * float(stringtest))
+
+    repeat_cred = input("Would you like to resimulate? yes/no: ")
